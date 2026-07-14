@@ -1,0 +1,57 @@
+# Cloudflare Pages deploy config for Clipsick.
+# Adapted from the framework's own wrangler-clips.toml (clips.agent-native.com).
+#
+# Build first, then deploy:
+#   NITRO_PRESET=cloudflare_pages pnpm build
+#   npx wrangler pages deploy dist --project-name clipsick
+#
+# Runtime = the Cloudflare Workers runtime (workerd). No child_process / no
+# persistent filesystem: the server-side ffmpeg transcription *fallback* is
+# stubbed out. Native (desktop) transcripts + Groq/OpenAI cloud transcription
+# still work.
+
+name = "clipsick"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+# Route each request from the nearest region to where the data lives.
+[placement]
+mode = "smart"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Database — pick ONE. This file is set up for D1 (Cloudflare-native, best cold
+# starts, one vendor). To use Postgres instead, see the note at the bottom.
+#
+# The framework auto-detects the D1 binding named `DB` (globalThis.__cf_env.DB)
+# whenever DATABASE_URL is NOT set, and auto-runs migrations on first request.
+#
+# Create the database once, then paste its id below:
+#   npx wrangler d1 create clipsick
+#
+[[d1_databases]]
+binding = "DB"
+database_name = "clipsick"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets are NOT stored here. Set them on the Pages project after the first
+# deploy (or in the dashboard → Settings → Environment variables):
+#
+#   # Video storage — Cloudflare R2 (S3-compatible). Create a bucket + R2 API
+#   # token, then:
+#   npx wrangler pages secret put R2_BUCKET            --project-name clipsick
+#   npx wrangler pages secret put R2_ACCESS_KEY_ID     --project-name clipsick
+#   npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name clipsick
+#   npx wrangler pages secret put R2_ENDPOINT          --project-name clipsick   # https://<acct>.r2.cloudflarestorage.com
+#   npx wrangler pages secret put R2_PUBLIC_BASE_URL   --project-name clipsick   # optional: public bucket / custom domain for read URLs
+#
+#   # Transcription (one is enough; Groq is preferred when both are set)
+#   npx wrangler pages secret put GROQ_API_KEY         --project-name clipsick
+#   # npx wrangler pages secret put OPENAI_API_KEY     --project-name clipsick
+#
+# ── To use Postgres (e.g. Neon) INSTEAD of D1 ────────────────────────────────
+# 1. Delete (or comment out) the [[d1_databases]] block above.
+# 2. Set DATABASE_URL as a secret — it takes priority over any D1 binding:
+#      npx wrangler pages secret put DATABASE_URL      --project-name clipsick
+#    (postgres://USER:PASS@HOST/DB?sslmode=require)
